@@ -2,7 +2,7 @@
   description = "tmux copy-mode cursor reproducer";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/34ab99075ac4f7e40cf037eef32cb1c360bb85e9";
     tmux-src = {
       url = "github:tmux/tmux/94796f6b1182507efac8a272fc309a79e22e58a5";
       flake = false;
