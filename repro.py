@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Show the copy-mode cursor while application updates alternate on and off."""
+"""Show the copy-mode cursor under continuous application updates."""
 
 import argparse
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
@@ -37,6 +38,16 @@ report = [
 if args.revision:
     report.append("Source revision: " + args.revision)
 
+updates = True
+
+
+def toggle_updates(signum, frame):
+    global updates
+    updates = not updates
+
+
+signal.signal(signal.SIGUSR1, toggle_updates)
+
 with tempfile.TemporaryDirectory(prefix="tmux-repro-") as tmp:
     root = Path(tmp)
     fifo = root / "control"
@@ -60,8 +71,9 @@ with tempfile.TemporaryDirectory(prefix="tmux-repro-") as tmp:
          producer, str(fifo), str(output / "inside-term.txt"))
     try:
         report.append(tmux("-V"))
+        tmux("bind-key", "-n", "F2", "run-shell", f"kill -USR1 {os.getpid()}")
         tmux("set-option", "-g", "status-format[0]",
-             "Updates OFF | Arrows: move selection | Ctrl-b d: exit")
+             "Updates ON (30 Hz) | F2: pause/resume | Arrows: move | Ctrl-b d: exit")
         client = subprocess.Popen(
             [*command, "-vv", "attach-session", "-t", "test"],
             cwd=output, env=environment,
@@ -70,17 +82,15 @@ with tempfile.TemporaryDirectory(prefix="tmux-repro-") as tmp:
         report.append("TERM inside: " + (output / "inside-term.txt").read_text().strip())
         tmux("copy-mode", "-t", "test:0.0")
         tmux("send-keys", "-t", "test:0.0", "-X", "begin-selection")
-        started = time.monotonic()
-        previous_phase = None
+        previous_updates = None
         while client.poll() is None:
-            phase = int((time.monotonic() - started) / 8) % 2
-            if phase != previous_phase:
-                label = "ON" if phase else "OFF"
+            if updates != previous_updates:
+                label = "ON (30 Hz)" if updates else "PAUSED"
                 tmux("set-option", "-g", "status-format[0]",
-                     f"Updates {label} | Arrows: move selection | Ctrl-b d: exit")
+                     f"Updates {label} | F2: pause/resume | Arrows: move | Ctrl-b d: exit")
                 report.append(f"{time.time():.6f}: application updates {label}")
-                previous_phase = phase
-            if phase:
+                previous_updates = updates
+            if updates:
                 os.write(control, b"u")
             time.sleep(1 / 30)
     finally:

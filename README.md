@@ -13,12 +13,12 @@ nix run . -- logs
 ```
 
 The demo enters copy mode with a selection started. Move with the arrow keys
-and watch the cursor beside the highlighted text. The status line shows
-application updates switching **OFF / ON every eight seconds**.
+and watch the cursor beside the highlighted text. Application updates run
+**continuously at 30 Hz**. Press **F2** to pause or resume them.
 
-- **Expected:** the cursor follows your keys in both phases.
-- **Observed:** during ON, the selection changes but the cursor is misplaced.
-  It recovers about a second into OFF.
+- **Expected:** the cursor follows your keys while updates are running.
+- **Observed:** the selection changes but the cursor is misplaced.
+  Pausing updates lets the cursor recover after about a second.
 
 Press **Ctrl-b, then d** to exit. Compare with the same demo using the fix:
 
@@ -26,7 +26,7 @@ Press **Ctrl-b, then d** to exit. Compare with the same demo using the fix:
 nix run .#patched -- logs-patched
 ```
 
-The Python application emits complete DECSET 2026 updates at 30 Hz during ON.
+The Python application emits complete DECSET 2026 updates at 30 Hz.
 The demo uses a private server, `-f /dev/null`, and an instruction status line.
 Nix pins tmux to
 [`94796f6b`](https://github.com/tmux/tmux/commit/94796f6b1182507efac8a272fc309a79e22e58a5)
@@ -47,7 +47,8 @@ Following tmux's [contribution guidelines](https://github.com/tmux/tmux/blob/mas
 the demo records `uname -sp`, tmux version, inside/outside `$TERM`, config,
 update phase timestamps, and `-vv` server, client and output logs.
 Attach **logs.zip** directly to the issue and include your terminal's name and
-version. A short recording showing ON and OFF would illustrate the symptom.
+version. A short recording showing running and paused updates would illustrate
+the symptom.
 
 The server uses a temporary home, a clean environment and generated text.
 Related reports: [#5525](https://github.com/tmux/tmux/issues/5525)
