@@ -13,7 +13,6 @@
     packages = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        python = pkgs.python3.withPackages (ps: [ ps.pyte ]);
         tmux = pkgs.tmux.overrideAttrs {
           version = "next-3.9";
           src = tmux-src;
@@ -25,7 +24,7 @@
           '';
         });
         reproduce = binary: pkgs.writeShellScriptBin "tmux-repro" ''
-          exec ${python}/bin/python3 ${./repro.py} \
+          exec ${pkgs.python3}/bin/python3 ${./repro.py} \
             --producer ${./producer.py} --revision ${tmux-src.rev} \
             ${binary}/bin/tmux "$@"
         '';
