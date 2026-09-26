@@ -3,20 +3,60 @@
 ### Motivation
 
 I first saw this with Codex CLI 0.157.1 (`--no-alt-screen`) in tmux 3.8-rc2.
-While Codex was working, moving around in copy mode left the visible cursor
-stuck. Selection worked, and cursor movement recovered when Codex became idle.
+While Codex was explicitly in the "working" mode (e.g. you prompted it and its
+off doing its things), moving around the _cursor_ in copy mode visually removed
+the cursor; I could not see it anymore.
 
-With LLM-assisted debugging, I reduced the trigger to a Python application
-emitting synchronized updates. The trace led to `server_client_reset_state()`:
-cursor coordinates come from the displayed copy-mode screen, but the
-`MODE_SYNC` check uses the underlying application's screen.
+The logical cursor was sitll there - could still do selection, but I would have
+to guess where exactly my cursor was.
 
-The proposed change uses the displayed screen's mode too, which fixes this
-reproduction. The trace also suggests application synchronization remains
-active until its timeout in copy mode, so there may be a deeper issue with
-its lifetime. I'd appreciate review of whether this cursor check is the right
-place to address the symptom and whether the synchronization handling also
-needs attention.
+This was not an issue once codex stpoped working in the codex-cli; so I
+suspected it was some kind of constant updating issue.
+
+I got an LLM to generate a 1 line patch and this is what it had to say:
+
+```
+I ran Codex CLI 0.157.1 in an isolated tmux server and captured its PTY
+output. While working, it emitted roughly 30 balanced DECSET 2026 updates
+per second. Copy-mode cursor coordinates changed correctly, but tmux's
+terminal output left the visible cursor elsewhere. Idle output stopped and
+cursor movement recovered.
+
+I reduced the trigger to a Python program emitting synchronized updates,
+then traced server_client_reset_state(). It takes cursor coordinates from
+s = wp->screen, the displayed screen, but checks MODE_SYNC on wp->base.mode,
+the application's screen. Copy mode has its own screen. The application's
+synchronization state can therefore suppress positioning of its cursor.
+
+There is also a synchronization-lifetime issue in this path: application
+output parsed during copy mode uses a screen_write_ctx with no pane.
+Starting synchronization still uses the input context's pane, whereas
+screen_write_end_sync() returns when ctx->wp is NULL. In the reproduction,
+MODE_SYNC remains set after the end sequence until the one-second timeout;
+repeated updates restart that timer.
+
+I changed pane_mode = wp->base.mode to pane_mode = s->mode and built both
+versions at 94796f6b1182507efac8a272fc309a79e22e58a5. The cursor mismatch
+reproduced on the original and cleared with the patch. I also checked that
+normal application cursor updates remain deferred until a synchronized
+frame ends. In normal mode, wp->screen and &wp->base are the same screen.
+
+I made the public reproduction interactive, entering plain copy mode with
+continuous output and F2 to pause it. Private checks inspected cursor output,
+including with terminal synchronization support advertised. The patch leaves
+the synchronization-lifetime behavior above unchanged and also affects other
+pane modes; my behavior checks covered normal mode and copy mode.
+```
+
+The patch worked; I'm currently running with this patch in my private nix
+flakes, but I want confirmation that this is the right place to add it - not
+good at terminal semantics.
+
+I've attached a small repo (hopefully readable; the only thing that's
+complicated is `repro.py` but it's mostly scaffolding; the visual bug is what
+I'm targeting) built with nix that should show you what I mean. If that doesn't
+work, then try codex v0.157 and entering copy mode while codex is working; else
+I can send a video too.
 
 ### Issue description
 
@@ -55,5 +95,3 @@ keys while output continues.
   output.
 
 The demo saves `-vv` server, client and output logs in `logs.zip` on exit.
-
-<!-- Attach logs.zip from this run directly to the issue before submitting. -->
